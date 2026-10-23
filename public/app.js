@@ -67,8 +67,18 @@ function setupGoogle() {
   if (gisReady || !window.google || !google.accounts) return;
   gisReady = true;
   google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogleCredential, ux_mode: 'popup', auto_select: false });
+  renderGoogleButtons();
+}
+// GIS sizes its button when it renders it; a button rendered inside a hidden section comes out 0 px wide. So the
+// buttons are (re)rendered every time a view becomes visible (render() below). locale: without it the button follows
+// the browser language.
+function renderGoogleButtons() {
+  if (!gisReady) return;
   for (const [id, text] of [['google-signin', 'signin_with'], ['google-link', 'continue_with']]) {
-    google.accounts.id.renderButton($(id), { type: 'standard', theme: 'outline', size: 'large', text, shape: 'pill' });
+    const el = $(id);
+    if (el.hidden || el.closest('[hidden]')) continue;
+    el.innerHTML = '';
+    google.accounts.id.renderButton(el, { type: 'standard', theme: 'outline', size: 'large', text, shape: 'pill', locale: 'en' });
   }
 }
 // The GIS script is async: poll briefly for it; if it never arrives (blocked, or origin not authorized) say so.
@@ -87,7 +97,7 @@ async function render() {
   const user = Parse.User.current();
   $('signed-out').hidden = !!user;
   $('signed-in').hidden = !user;
-  if (!user) return;
+  if (!user) { renderGoogleButtons(); return; }
 
   // What the backend tells us about this account. linkInfo adds hasPassword and the session's createdAt, which the
   // SDK cannot see; everything else comes from the user object itself (GET /users/me).
@@ -122,6 +132,7 @@ async function render() {
   for (const id of ['unlink-google', 'unlink-anonymous']) $(id).disabled = ways <= 1;
   $('link-email-toggle').hidden = info.hasPassword;
   $('google-link').hidden = providers.includes('google');
+  renderGoogleButtons();
 
   // The stored record, with provider payloads reduced to their keys: id tokens and guest ids never reach the screen.
   const stored = {
