@@ -1,6 +1,6 @@
 {
   "name": "social-login-starter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Let one signed-in user link several sign-in methods (Google, anonymous guest, email/password) to one account on a Parse backend (Back4app) — no auth server.",
   "license": "MIT",

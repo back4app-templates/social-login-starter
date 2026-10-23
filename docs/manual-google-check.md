@@ -52,8 +52,9 @@ token, a session token or a guest id into the evidence file — object ids and s
 10. **Wrong client id (optional, 2 minutes).** Temporarily set a different client id in Back4app → Authentication →
     Google, sign in with Google: expect `POST /users` → 400 with code **101** and a message about the audience
     (`jwt audience invalid` or `id token not authorized for this clientId`). Put the real id back. Record the text.
-11. **Cleanup.** Delete the test users with the master key (`DELETE /users/<id>` with `X-Parse-Master-Key`), or from the
-    dashboard's Database browser. Note how many you deleted.
+11. **Cleanup.** Delete the test users from the dashboard's Database browser, or — while `SETUP_ENABLED` is still true —
+    with `POST /functions/testCleanup` `{"objectIds":["<id>", …]}` (REST key; only users younger than 2 h). Note how
+    many you deleted.
 
 ## Evidence template
 

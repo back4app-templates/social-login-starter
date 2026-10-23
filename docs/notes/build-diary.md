@@ -19,7 +19,7 @@ web client id; `authData.google {id, id_token}`; the feasibility results of 2026
 - `cloud/main.js`: `beforeSave(_User)` (owner-only identity changes, provider allow-list, `hasPassword` flag),
   `afterSave(_User)` placeholder, `linkInfo`, `signOutEverywhere`.
 - `scripts/setup.mjs` (CLP), `scripts/dev-server.mjs` (local parse-server, exported for the tests),
-  `scripts/measure.mjs` (b1 latency), `test/*.test.mjs` (15 node:test cases, raw REST).
+  `scripts/measure.mjs` (b1 latency), `test/*.test.mjs` (16 node:test cases, raw REST).
 
 ### Lifecycle on local parse-server 7.5.4 — matches the Back4app feasibility run
 
@@ -68,7 +68,7 @@ web client id; `authData.google {id, id_token}`; the feasibility results of 2026
 |---|---|---|---|
 | R1 | `GET /users` without a session (CLP `find: requiresAuthentication`) | HTTP 404, code **101** "Permission denied, user needs to be authenticated." | older servers answered 119; `npm run setup` prints the probe |
 | R2 | `PUT /users/<other>` with a foreign session, owner-only ACL | HTTP 400, code **206** "Insufficient auth." | the feasibility run did not try it; test "changing another user's username…" records it |
-| R3 | new-user ACL (`enforcePrivateUsers`) | `{<id>: {read, write}}` — no public read | Back4app's server setting is not visible from here; the same test asserts the ACL shape with the master key and will fail if public read is on. If it is, the CLP `protectedFields` still hides email/authData/hasPassword; only `username`/`createdAt` would leak to signed-in users. |
+| R3 | new-user ACL (`enforcePrivateUsers`) | `{<id>: {read, write}}` — no public read | Back4app's server setting is not visible from here; the test "changing another user's username…" asserts the ACL shape from `testWidenAcl`'s `before` and will fail if public read is on. If it is, the CLP `protectedFields` still hides email/authData/hasPassword; only `username`/`createdAt` would leak to signed-in users. |
 | R4 | `authData.github` (provider not configured) | HTTP **500**, code 1 "Internal server error." (`GitHubAdapter.validateOptions: GitHub options are required`) | the hook's allow-list never ran because parse-server failed first; expect 252 or 500 live — record |
 | R5 | forged `authData.google`: non-JWT / missing `id_token` / self-signed RS256 JWT | 101 "provided token does not decode as JWT" / 101 "id token is invalid for this user." / 101 "secret or public key must be provided" (after fetching Google's certs) | same adapter code in 7.5.2; confirm the texts |
 | R6 | `signOutEverywhere` | `{revoked: n}` | Cloud Code must be deployed; test "signOutEverywhere…" |
@@ -78,5 +78,5 @@ web client id; `authData.google {id, id_token}`; the feasibility results of 2026
 | R10 | latency b1 | local numbers above | run `npm run measure` against the live app from the same machine as the article's other measurements |
 
 Run all of them with `TEST_SERVER_URL=https://parseapi.back4app.com npm test` and `npm run measure`
-(after `npm run setup` and the Cloud Code upload). The suite prints "lifecycle observations" and "security
+(after the Cloud Code upload and `npm run setup`; neither needs the master key). The suite prints "lifecycle observations" and "security
 observations" blocks with the exact codes and texts to quote.

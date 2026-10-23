@@ -13,6 +13,10 @@ const ALLOWED_PROVIDERS = ['anonymous', 'google', 'facebook', 'apple', 'vkontakt
 
 const forbidden = (message) => { throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, message); }; // 119
 
+// Deploy-time switches (cloud/config.js, uploaded next to this file). Defaults apply when the file was not uploaded.
+let config = { SETUP_ENABLED: true };
+try { config = { ...config, ...require('./config.js') }; } catch (e) { /* no config.js on this deploy: defaults */ }
+
 // ---------------------------------------------------------------- _User hooks
 
 // beforeSave(_User) exists for three reasons:
@@ -100,4 +104,81 @@ Parse.Cloud.define('signOutEverywhere', async (request) => {
     .find({ useMasterKey: true });
   await Parse.Object.destroyAll(others, { useMasterKey: true });
   return { revoked: others.length };
+});
+
+// ---------------------------------------------------------------- setup and test helpers (guarded by SETUP_ENABLED)
+
+// On Back4app the master key is not handed to scripts or CI: these three functions do the privileged work INSIDE Cloud
+// Code instead, so `npm run setup`, `npm test` and `npm run measure` only ever need the app id + REST key. They are
+// deliberately dumb and narrow, and every one of them refuses to run once cloud/config.js says SETUP_ENABLED: false.
+// Set that before the app has real users (README, "Before going public").
+const SETUP_DISABLED = 'Setup helpers are disabled (cloud/config.js: SETUP_ENABLED=false).';
+const requireSetupEnabled = () => { if (config.SETUP_ENABLED !== true) forbidden(SETUP_DISABLED); };
+const invalid = (message) => { throw new Parse.Error(Parse.Error.VALIDATION_ERROR, message); }; // 142
+
+// The _User class-level permissions, same object as scripts/setup.mjs (USER_SCHEMA) and explained there:
+// sign-up public, everything else needs a session, protectedFields hide the identity columns from everyone but the owner.
+const USER_CLP = {
+  find: { requiresAuthentication: true },
+  count: {},
+  get: { requiresAuthentication: true },
+  create: { '*': true },
+  update: { requiresAuthentication: true },
+  delete: { requiresAuthentication: true },
+  addField: {},
+  protectedFields: { '*': ['email', 'authData', 'hasPassword', 'emailVerified'] },
+};
+
+// setupSchema: idempotent. Adds the hasPassword column when missing and (re)applies USER_CLP. Parse.Schema always uses
+// the master key, which is exactly why this lives here and not in a script.
+Parse.Cloud.define('setupSchema', async () => {
+  requireSetupEnabled();
+  const schema = new Parse.Schema('_User');
+  const existing = await schema.get();
+  const newFields = [];
+  if (!existing.fields || !existing.fields.hasPassword) { schema.addBoolean('hasPassword'); newFields.push('hasPassword'); }
+  schema.setCLP(USER_CLP);
+  await schema.update();
+  return { className: '_User', newFields, clp: USER_CLP, summary: `schema _User: updated (${newFields.length} new field(s)), CLP set` };
+});
+
+// testCleanup({ usernamesPrefix?, objectIds? }): deletes test users and their sessions.
+//   usernamesPrefix — at least 6 characters (e.g. "measure_"), so a sloppy call cannot sweep real users;
+//   objectIds       — at most 200, and only users created in the last 2 hours (the test suite tracks every user it
+//                     creates by id because guests get a random username).
+Parse.Cloud.define('testCleanup', async (request) => {
+  requireSetupEnabled();
+  const params = request.params || {};
+  const prefix = params.usernamesPrefix === undefined ? '' : params.usernamesPrefix;
+  const ids = params.objectIds === undefined ? [] : params.objectIds;
+  if (typeof prefix !== 'string' || (prefix && prefix.length < 6)) invalid('usernamesPrefix must be a string of at least 6 characters.');
+  if (!Array.isArray(ids) || ids.length > 200 || ids.some((id) => typeof id !== 'string' || !id)) invalid('objectIds must be an array of at most 200 object ids.');
+  if (!prefix && ids.length === 0) invalid('Pass usernamesPrefix and/or objectIds.');
+
+  const queries = [];
+  if (prefix) queries.push(new Parse.Query(Parse.User).startsWith('username', prefix));
+  if (ids.length) queries.push(new Parse.Query(Parse.User).containedIn('objectId', ids).greaterThan('createdAt', new Date(Date.now() - 2 * 60 * 60 * 1000)));
+  const query = queries.length === 1 ? queries[0] : Parse.Query.or(...queries);
+  const users = await query.limit(1000).find({ useMasterKey: true });
+  if (users.length === 0) return { deleted: 0, sessionsDeleted: 0 };
+  const sessions = await new Parse.Query(Parse.Session).containedIn('user', users).limit(1000).find({ useMasterKey: true });
+  await Parse.Object.destroyAll(sessions, { useMasterKey: true });
+  await Parse.Object.destroyAll(users, { useMasterKey: true });
+  return { deleted: users.length, sessionsDeleted: sessions.length };
+});
+
+// testWidenAcl({ objectId }): simulates the misconfiguration the security suite needs — a public read+write ACL on one
+// user — and reports the ACL it found first, which is how the suite checks enforcePrivateUsers without the master key.
+Parse.Cloud.define('testWidenAcl', async (request) => {
+  requireSetupEnabled();
+  const objectId = request.params && request.params.objectId;
+  if (typeof objectId !== 'string' || !objectId) invalid('objectId is required.');
+  const user = await new Parse.Query(Parse.User).get(objectId, { useMasterKey: true });
+  const before = user.getACL() ? user.getACL().toJSON() : null;
+  const acl = new Parse.ACL();
+  acl.setPublicReadAccess(true);
+  acl.setPublicWriteAccess(true);
+  user.setACL(acl);
+  await user.save(null, { useMasterKey: true });
+  return { objectId, before, after: acl.toJSON() };
 });

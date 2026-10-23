@@ -25,19 +25,19 @@ test('listing or fetching other users is denied: no session → CLP; with a sess
   assert.deepEqual(list.json.results.map((u) => u.objectId), [b.objectId], 'owner-only ACL: a find returns just yourself');
   const get = await rest(h.env, 'GET', `/users/${a.objectId}`, undefined, { raw: true, session: b.token });
   assert.equal(get.json.code, 101, "another user's row reads as Object not found");
-  const byMaster = await rest(h.env, 'GET', `/users/${a.objectId}`, undefined, { raw: true, master: true });
-  assert.equal(byMaster.status, 200);
-  assert.deepEqual(byMaster.json.ACL, { [a.objectId]: { read: true, write: true } }, 'enforcePrivateUsers: no public read on new users');
+  // The ACL itself is only visible to the master key: the suite reads it through testWidenAcl (next test) instead.
 });
 
-test("changing another user's username with a foreign session is denied (ACL), and by the hook when the ACL is widened", async () => {
+test("changing another user's username with a foreign session is denied (ACL), and by the hook when the ACL is widened", async (t) => {
   const victim = await h.anonymous();
   const attacker = await h.anonymous();
   const r1 = await h.update(victim.objectId, { username: unique('stolen') }, attacker.token);
   assert.ok(r1.status >= 400);
   h.observe("foreign PUT /users/<id> {username} with owner-only ACL", `HTTP ${r1.status} code ${r1.json.code} "${r1.json.error}"`);
-  // Widen the victim's ACL with the master key (a misconfiguration) — now only the Cloud hook stands in the way.
-  await rest(h.env, 'PUT', `/users/${victim.objectId}`, { ACL: { '*': { read: true, write: true } } }, { master: true });
+  // Widen the victim's ACL (a misconfiguration, done with the master key inside Cloud Code) — now only the hook stands in the way.
+  const widened = await h.widenAcl(victim.objectId);
+  if (!widened) { t.skip('SKIP: widening an ACL needs testWidenAcl (SETUP_ENABLED=false on this backend) or a MASTER_KEY'); return; }
+  assert.deepEqual(widened.before, { [victim.objectId]: { read: true, write: true } }, 'enforcePrivateUsers: new users had an owner-only ACL');
   const r2 = await h.update(victim.objectId, { username: unique('stolen') }, attacker.token);
   assert.equal(r2.status, 400);
   assert.equal(r2.json.code, 119);
@@ -99,4 +99,23 @@ test('Cloud functions refuse anonymous (no session) callers with 209', async () 
     const r = await h.fn(name, {}, undefined);
     assert.equal(r.status, 400); assert.equal(r.json.code, 209);
   }
+});
+
+test('setup helpers: setupSchema is idempotent; testCleanup validates its input and deletes only what it is told', async (t) => {
+  if (h.helpers !== 'cloud') { t.skip('SKIP: the Cloud setup helpers are disabled on this backend (SETUP_ENABLED=false)'); return; }
+  const again = await h.fn('setupSchema', {});
+  assert.equal(again.status, 200);
+  assert.deepEqual(again.json.result.newFields, [], 'second call adds no field');
+  assert.equal((await h.fn('testCleanup', {})).json.code, 142, 'nothing to match → refused');
+  assert.equal((await h.fn('testCleanup', { usernamesPrefix: 'u_' })).json.code, 142, 'a short prefix could sweep real users → refused');
+  assert.equal((await h.fn('testCleanup', { objectIds: 'abc' })).json.code, 142);
+  const nobody = await h.fn('testCleanup', { usernamesPrefix: 'zz_nobody_here_' });
+  assert.deepEqual(nobody.json.result, { deleted: 0, sessionsDeleted: 0 });
+  const a = await h.anonymous();
+  const d = await h.fn('testCleanup', { objectIds: [a.objectId] });
+  assert.deepEqual(d.json.result, { deleted: 1, sessionsDeleted: 1 });
+  assert.equal(await h.sessionState(a.token), 'invalid(209)', 'the deleted user\'s session is gone too');
+  h.created.delete(a.objectId);
+  const absent = await h.fn('testWidenAcl', { objectId: a.objectId });
+  assert.equal(absent.json.code, 101, 'testWidenAcl on a deleted user → Object not found');
 });

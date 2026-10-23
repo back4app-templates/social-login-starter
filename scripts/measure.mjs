@@ -9,7 +9,8 @@
 //   google_id_token   NOT automated: needs a Google-signed ID token for a real account. Measured by hand with the
 //                     browser's Network tab, see docs/manual-google-check.md; the summary carries a placeholder row.
 // Output: <out>/measure-<target>-<date>.csv (one row per run) and <out>/measure-<target>-<date>-summary.csv (p50/p95).
-// Cleanup: every user created is deleted with the master key when one is available.
+// Needs only APP_ID + REST_KEY. Cleanup: every user created is deleted through the Cloud function testCleanup (no master
+// key; cloud/config.js SETUP_ENABLED must be true), or directly with the master key when .env has one.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -71,7 +72,16 @@ console.log(`wrote ${base}.csv and ${base}-summary.csv`);
 if (env.masterKey) {
   let n = 0;
   for (const id of created) { try { await rest(env, 'DELETE', `/users/${id}`, undefined, { master: true }); n++; } catch { /* keep going */ } }
-  console.log(`cleanup: deleted ${n} user(s) created by this run`);
+  console.log(`cleanup: deleted ${n} user(s) created by this run (master key)`);
 } else {
-  console.log(`cleanup skipped (no MASTER_KEY): ${created.size} user(s) left behind`);
+  // No master key: the Cloud function testCleanup deletes by id (users created in the last 2 h) and by username prefix.
+  const ids = [...created];
+  let n = 0; let failed = null;
+  for (let i = 0; i < Math.max(1, Math.ceil(ids.length / 100)); i++) {
+    const params = { objectIds: ids.slice(i * 100, (i + 1) * 100), ...(i === 0 ? { usernamesPrefix: 'measure_' } : {}) };
+    const r = await rest(env, 'POST', '/functions/testCleanup', params, { raw: true });
+    if (r.status === 200) n += r.json.result.deleted; else { failed = r.json?.error || `HTTP ${r.status}`; break; }
+  }
+  if (failed) console.log(`cleanup skipped (testCleanup: ${failed}): ${created.size} user(s) left behind`);
+  else console.log(`cleanup: testCleanup deleted ${n} user(s) created by this run (no master key)`);
 }
