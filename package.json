@@ -1,0 +1,26 @@
+{
+  "name": "social-login-starter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Let one signed-in user link several sign-in methods (Google, anonymous guest, email/password) to one account on a Parse backend (Back4app) — no auth server.",
+  "license": "MIT",
+  "author": "Back4app Engineering",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development APP_ID=social-login-dev JS_KEY=social-login-dev-js SERVER_URL=http://localhost:1337/parse node server.js",
+    "dev:server": "node scripts/dev-server.mjs",
+    "setup": "node scripts/setup.mjs",
+    "measure": "node scripts/measure.mjs",
+    "test": "node --test --test-concurrency=1 'test/*.test.mjs'"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "parse-server": "^7.5.4"
+  }
+}

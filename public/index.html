@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Social login starter</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/parse@8.6.2/dist/parse.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <main>
+    <h1>One account, several ways in</h1>
+    <p class="lead">Guest, Google and e-mail/password sign-in on a Parse backend — and linking them to one user. No auth server.</p>
+
+    <section id="signed-out" hidden>
+      <h2>Sign in</h2>
+      <div class="row">
+        <button id="guest" class="primary">Continue as guest</button>
+        <div id="google-signin" class="gsi"></div>
+      </div>
+      <form id="email-form" class="stack">
+        <h3>E-mail and password</h3>
+        <input name="username" placeholder="username" autocomplete="username" required>
+        <input name="email" type="email" placeholder="e-mail (sign-up only)" autocomplete="email">
+        <input name="password" type="password" placeholder="password" autocomplete="current-password" required minlength="8">
+        <div class="row">
+          <button type="submit" data-mode="login">Log in</button>
+          <button type="submit" data-mode="signup">Sign up</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="signed-in" hidden>
+      <h2>Linked methods <small id="who"></small></h2>
+      <ul id="methods"></ul>
+      <div class="row">
+        <div id="google-link" class="gsi"></div>
+        <button id="link-email-toggle">Link e-mail/password…</button>
+        <button id="unlink-google" hidden>Unlink Google</button>
+        <button id="unlink-anonymous" hidden>Unlink guest id</button>
+      </div>
+      <form id="link-form" class="stack" hidden>
+        <input name="username" placeholder="username" autocomplete="username" required>
+        <input name="email" type="email" placeholder="e-mail" autocomplete="email" required>
+        <input name="password" type="password" placeholder="password" autocomplete="new-password" required minlength="8">
+        <div class="row"><button type="submit" class="primary">Link</button><button type="button" id="link-cancel">Cancel</button></div>
+      </form>
+      <div class="row">
+        <button id="signout">Sign out</button>
+        <button id="signout-everywhere">Sign out everywhere</button>
+      </div>
+      <h3>What the backend stored</h3>
+      <pre id="stored"></pre>
+    </section>
+
+    <p id="msg" class="msg" hidden></p>
+    <footer>Parse JS SDK 8 · Google Identity Services · Cloud Code in <code>cloud/main.js</code>. Built by Back4app Engineering, MIT.</footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
