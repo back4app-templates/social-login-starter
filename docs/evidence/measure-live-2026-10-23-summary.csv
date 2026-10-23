@@ -1,0 +1,6 @@
+# target=live host=parseapi.back4app.com date=2026-10-23T13:12:42.394Z node=v25.8.1 client=darwin
+scenario,runs,warmups,p50_ms,p95_ms,min_ms,max_ms,errors,note
+anonymous_new,100,20,160.5,430.1,149.8,457.3,0,
+anonymous_repeat,100,20,163.8,247.8,143.6,266.6,0,
+email_login,100,20,227.7,287.8,215.4,313.3,0,
+google_id_token,0,0,,,,,,placeholder — measure manually (docs/manual-google-check.md, step 7)
