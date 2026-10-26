@@ -7,7 +7,8 @@ One static page, the Parse JS SDK, Google Identity Services and 90 lines of Clou
 (Parse Server 7); the page is served by a tiny Express app on Back4app Containers. No OAuth server of ours, no token
 exchange endpoint: the browser hands Google's ID token to Parse Server, which verifies it against Google.
 
-Built by Back4app Engineering · MIT.
+Built by Back4app Engineering · MIT. Live demo: https://socialloginstarter-6om29ktc.b4a.run (Back4app Containers, deployed
+from an upload of this folder with the Node.js Buildpack; demo backend, accounts may be wiped at any time).
 
 ## What it shows
 
