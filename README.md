@@ -19,7 +19,7 @@ from an upload of this folder with the Node.js Buildpack; demo backend, accounts
 | Sign up / Log in | `POST /users {username,password,email}` / `POST /login` | the classic path |
 | Link e-mail/password (signed in) | `PUT /users/<id> {username,password,email}` with the session | sets the password, **answers with a new session token and revokes the old ones**, keeps `authData.anonymous` |
 | Link Google (signed in) | `PUT /users/<id> {authData:{google:{…}}}` | verifies the token, links; a Google id already used by another user → 208 |
-| Unlink Google / guest id | `PUT /users/<id> {authData:{google:null}}` | removes the provider; the session stays valid; removing the last way in is allowed (the UI prevents it) |
+| Unlink Google / guest id | `PUT /users/<id> {authData:{google:null}}` | removes the provider; the session stays valid; removing the **last** way in is refused by the `beforeSave` hook (119) — Parse Server alone would allow it |
 | Sign out | `POST /logout` | kills this session only |
 | Sign out everywhere | Cloud function `signOutEverywhere` | deletes every other `_Session` row of the caller (Parse has no built-in for this) |
 | "What the backend stored" | `GET /users/me` + Cloud function `linkInfo` | authData *keys* only, `hasPassword` (maintained by a `beforeSave` hook), session `createdAt` |
@@ -37,8 +37,10 @@ Collisions are shown with the backend's own text: `202 Account already exists fo
   signed out.
 - **Parse never says whether a user has a password.** The hook in `cloud/main.js` sees the plaintext password in
   `beforeSave` (it runs before hashing) and maintains a `hasPassword` boolean that clients cannot forge.
-- **Unlinking the last method is allowed by the server.** A guest with no password who unlinks `anonymous` keeps a
-  working session and an account nobody can ever sign into again. The UI disables the button in that state.
+- **Parse Server lets a user unlink their last method** (measured: a guest with no password who unlinks `anonymous`
+  keeps a working session and an account nobody can ever sign into again). The hook in `cloud/main.js` refuses that
+  request with 119 "Cannot remove the last sign-in method"; the UI also disables the button, but the server rule is the
+  one that holds against a direct `PUT`. The master key may still do it (support tooling).
 - **Providers**: the Back4app dashboard offers Apple, Google, Facebook, X and VK (Parse names: `apple`, `google`,
   `facebook`, `twitter`, `vkontakte`). GitHub is not offered. The hook allow-lists exactly those plus `anonymous`.
 
@@ -46,7 +48,7 @@ Collisions are shown with the backend's own text: `202 Account already exists fo
 
 ```
 public/            index.html · app.js · style.css — the whole client (~300 lines)
-cloud/main.js      beforeSave(_User), afterSave(_User) placeholder, linkInfo, signOutEverywhere,
+cloud/main.js      beforeSave(_User) (owner-only identity changes, provider allow-list, hasPassword, last-method guard), linkInfo, signOutEverywhere,
                    + setupSchema / testCleanup / testWidenAcl (master-key work done inside Cloud Code, see below)
 cloud/config.js    SETUP_ENABLED switch for those three helpers (true while setting up, false before going public)
 server.js          Express: static files, /config.js (APP_ID, JS_KEY, SERVER_URL, GOOGLE_CLIENT_ID), /healthz

@@ -72,18 +72,28 @@ test('unlink anonymous: authData.anonymous=null; the old guest id now creates a 
   assert.notEqual(replay.objectId, a.objectId);
 });
 
-test('unlink the LAST sign-in method of a guest (no password): allowed — the account becomes unreachable', async () => {
+test('unlink the LAST sign-in method of a guest (no password): refused by the hook (119); allowed once a password exists', async () => {
   const a = await h.anonymous();
   const r = await h.update(a.objectId, { authData: { anonymous: null } }, a.token);
   h.observe('unlink last provider of a password-less guest', `HTTP ${r.status}${r.json?.code ? ` code ${r.json.code} "${r.json.error}"` : ''}`);
-  assert.equal(r.status, 200, 'parse-server does not refuse to remove the last provider');
-  assert.equal(await h.sessionState(a.token), 'valid', 'the current session keeps working');
+  assert.equal(r.status, 400, 'parse-server alone would answer 200 here (measured); the beforeSave hook refuses');
+  assert.equal(r.json.code, 119);
+  assert.match(r.json.error, /last sign-in method/);
   const info = await h.fn('linkInfo', {}, a.token);
-  assert.deepEqual(info.json.result.providers, []);
-  assert.equal(info.json.result.hasPassword, false);
+  assert.deepEqual(info.json.result.providers, ['anonymous'], 'nothing changed');
+  // With a password linked, unlinking the guest id is fine: the account stays reachable.
+  const username = unique('keep'); const pw = password();
+  const linked = await h.update(a.objectId, { username, password: pw, email: `${username}@example.test` }, a.token);
+  assert.equal(linked.status, 200);
+  const token2 = linked.json.sessionToken || a.token;
+  const r2 = await h.update(a.objectId, { authData: { anonymous: null } }, token2);
+  assert.equal(r2.status, 200, JSON.stringify(r2.json));
+  const info2 = await h.fn('linkInfo', {}, token2);
+  assert.deepEqual(info2.json.result.providers, []);
+  assert.equal(info2.json.result.hasPassword, true);
   const replay = await h.anonymous(a.id);
-  assert.notEqual(replay.objectId, a.objectId, 'the guest id no longer resolves to the account: it is orphaned');
-  h.observe('orphaned account', `${a.objectId} has providers=[] and hasPassword=false; the UI must prevent this (see public/app.js)`);
+  assert.notEqual(replay.objectId, a.objectId, 'the old guest id now creates a separate user');
+  h.observe('last-method guard', `password-less guest: ${r.status}/${r.json.code}; after linking a password the unlink answers ${r2.status}`);
 });
 
 test('collisions: a second account cannot take the same username (202) or e-mail (203)', async () => {

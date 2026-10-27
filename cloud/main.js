@@ -55,6 +55,18 @@ Parse.Cloud.beforeSave(Parse.User, (request) => {
     // A client tried to set the flag directly: put back the stored value.
     user.set('hasPassword', request.original ? request.original.get('hasPassword') === true : false);
   }
+
+  //  4. Parse Server lets a user unlink their last sign-in method (measured: PUT {authData:{anonymous:null}} on a
+  //     password-less guest answers 200 and leaves an account nobody can ever sign into again). The demo's UI disables
+  //     that button, but a UI rule is not a rule: anyone with the keys can send the PUT. This refuses it on the server.
+  //     The master key may still do it (support tooling, account deletion flows).
+  if (!user.isNew() && !request.master && user.dirty('authData')) {
+    const remaining = Object.keys(authData || {}).filter((p) => authData[p] !== null && authData[p] !== undefined);
+    const keepsPassword = user.get('hasPassword') === true;
+    if (remaining.length === 0 && !keepsPassword) {
+      forbidden('Cannot remove the last sign-in method: link another one first.');
+    }
+  }
 });
 
 // afterSave(_User) is intentionally empty. It is the place for side effects that must happen once an identity change

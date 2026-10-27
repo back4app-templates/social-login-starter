@@ -80,3 +80,11 @@ web client id; `authData.google {id, id_token}`; the feasibility results of 2026
 Run all of them with `TEST_SERVER_URL=https://parseapi.back4app.com npm test` and `npm run measure`
 (after the Cloud Code upload and `npm run setup`; neither needs the master key). The suite prints "lifecycle observations" and "security
 observations" blocks with the exact codes and texts to quote.
+
+## 2026-10-27 — last-method guard on the server
+
+Editorial review of the published article: the "cannot orphan the account" protection lived only in the UI while the
+post itself shows direct REST calls. `beforeSave(_User)` now refuses a non-master update whose `authData` ends with no
+provider while `hasPassword` is false: 119 "Cannot remove the last sign-in method: link another one first." The
+lifecycle test that documented the orphan case now asserts the refusal, then links a password and shows the unlink
+succeeding afterwards (16/16 locally). Deployed to the live backend the same day.
