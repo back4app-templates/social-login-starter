@@ -1,7 +1,7 @@
 # social-login-starter
 
-Companion repository for the article *"How to let a signed-in user link several sign-in methods to one account
-(Google, anonymous guest, email/password) on a Parse backend — without an auth server"*.
+Companion repository for the article [*Social Login Without an Auth Server: Link Google, Guest and Password Sign-In to
+One Account*](https://www.back4app.com/blog/link-several-sign-in-methods-to-one-account) (Back4app blog, 2026-10-27).
 
 One static page, the Parse JS SDK, Google Identity Services and 90 lines of Cloud Code. The backend is a Back4app app
 (Parse Server 7); the page is served by a tiny Express app on Back4app Containers. No OAuth server of ours, no token
